@@ -1,0 +1,6 @@
+!/3rdparty/
+!/3rdparty/spdlog/
+!/3rdparty/gtest/
+
+# 项目排除路径
+/cmake-build-debug/
