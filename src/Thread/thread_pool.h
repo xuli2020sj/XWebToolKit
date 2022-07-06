@@ -5,15 +5,15 @@
 #include "thread_group.h"
 
 
-enum Priority {
-    PRIORITY_LOWEST = 0,
-    PRIORITY_LOW,
-    PRIORITY_NORMAL,
-    PRIORITY_HIGH,
-    PRIORITY_HIGHEST
-};
-
 class ThreadPool {
+public:
+    enum Priority {
+        PRIORITY_LOWEST = 0,
+        PRIORITY_LOW,
+        PRIORITY_NORMAL,
+        PRIORITY_HIGH,
+        PRIORITY_HIGHEST
+    };
 private:
     size_t thread_num_;
     TaskQueue task_queue_;
@@ -121,6 +121,8 @@ public:
     }
 
 };
+
+
 
 
 #endif //XLTOOLKIT_THREAD_POOL_H
