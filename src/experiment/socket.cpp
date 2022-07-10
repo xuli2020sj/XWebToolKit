@@ -67,3 +67,23 @@ bool Socket::setPeerSock(int sock, struct sockaddr *addr) {
     closeSock();
 
 }
+
+SockSender &SockSender::operator<<(const char *buf) {
+    return <#initializer#>;
+}
+
+SockSender &SockSender::operator<<(std::string buf) {
+    return <#initializer#>;
+}
+
+SockSender &SockSender::operator<<(Buffer::Ptr buf) {
+    return <#initializer#>;
+}
+
+ssize_t SockSender::send(std::string buf) {
+    return 0;
+}
+
+ssize_t SockSender::send(const char *buf, size_t size) {
+    return 0;
+}

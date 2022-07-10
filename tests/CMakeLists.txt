@@ -1,5 +1,8 @@
 aux_source_directory(. TEST_SRC_LIST)
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 foreach(TEST_SRC ${TEST_SRC_LIST})
     STRING(REGEX REPLACE ".cpp" "" TEST_EXE_NAME ${TEST_SRC})
     STRING(REGEX REPLACE "./" "" TEST_EXE_NAME ${TEST_EXE_NAME})
@@ -9,5 +12,7 @@ foreach(TEST_SRC ${TEST_SRC_LIST})
             ${CMAKE_PROJECT_NAME}_shared
             ${LINK_LIB_LIST}
             gtest
-            spdlog::spdlog)
+            spdlog::spdlog
+            Threads::Threads
+            ${CMAKE_THREAD_LIBS_INIT})
 endforeach(TEST_SRC ${TEST_SRC_LIST})
