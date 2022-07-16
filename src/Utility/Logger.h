@@ -11,292 +11,184 @@
 #include <utility>
 #include <iostream>
 #include <chrono>
-#include "ctime"
+#include <ctime>
 #include <sstream>
 #include <memory>
 #include <thread>
 #include <deque>
-
-class Logger;
-class LogWriter;
-class LogChannel;
-class LogInfo;
-class LogInfoMaker;
-
-using LogInfoPtr = std::shared_ptr<LogInfo>;
-using LogChannelPtr = std::shared_ptr<LogChannel>;
-using LogWriterPtr = std::shared_ptr<LogWriter>;
+#include <cstring>
+#include <list>
+#include <fstream>
+#include "chrono"
 
 class Noncopyable {
 public:
     Noncopyable(const Noncopyable&) = delete;
+    Noncopyable(const Noncopyable&&) = delete;
     Noncopyable operator=(const Noncopyable&) = delete;
+    Noncopyable operator=(const Noncopyable&&) = delete;
 protected:
     Noncopyable() = default;
     ~Noncopyable() = default;
 };
 
 #define CLEAR_COLOR "\033[0m"
-static const char *COLOR[6][2] = {{ "\033[44;37m", "\033[34m"},
-                                  {"\033[42;37m", "\033[32m"},
-                                  { "\033[46;37m", "\033[36m"},
-                                  {"\033[43;37m", "\033[33m"},
-                                  { "\033[45;37m", "\033[35m"},
-                                  {"\033[41;37m", "\033[31m"}};
+static const char *LOG_CONST_TABLE[][3] = {
+        {"\033[44;37m", "\033[34m", "T"},
+        {"\033[42;37m", "\033[32m", "D"},
+        {"\033[46;37m", "\033[36m", "I"},
+        {"\033[43;37m", "\033[33m", "W"},
+        {"\033[41;37m", "\033[31m", "E"}};
 
-static const char *LogLevelStr[] = { "trace", "debug", "info", "warn", "error",
-                                     "fatal" };
+typedef enum {
+    LTrace = 0, LDebug, LInfo, LWarn, LError
+} LogLevel;
 
-enum LogLevel {
-    Trace = 0,
-    Debug,
-    Info,
-    Warn,
-    Error,
-    Fatal,
-};
+class Logger;
+class LogWriter;
+class LogContext;
+class LogContextCapture;
+class LogChannel;
 
-class LogInfo {
-public:
-    friend class LogInfoMaker;
-    void format(std::ostream& ost, bool enableColor = true) {
-        using std::chrono::system_clock;
-        //TODO
-        static std::string appName;
-//        ost << appName << " "<< file_ << " " << line_ << "\r\n ";
-        if (enableColor) {
-            ost << COLOR[level_][1];
-        }
-        tm = system_clock::to_time_t(system_clock::now());
-        ost << ctime(&tm);
-        ost << " [" << LogLevelStr[level_] << "] ";
-        ost << function_ << " ";
-        ost << message_.str();
-        if (enableColor) {
-            ost << CLEAR_COLOR;
-        }
-        ost.flush();
-    }
+using LogContextPtr = std::shared_ptr<LogContext>;
+using LogChannelPtr = std::shared_ptr<LogChannel>;
+using LogWriterPtr = std::shared_ptr<LogWriter>;
+using LoggerPtr = std::shared_ptr<Logger>;
 
-    LogLevel getLevel() const {
-        return level_;
-    }
-private:
-    time_t tm{};
-    LogLevel level_;
-    size_t line_;
-    std::string function_;
-    std::string file_;
-    std::ostringstream message_;
-    LogInfo(LogLevel level, const char* file, const char* function,
-            int line) : level_(level), file_(file), function_(function), line_(line) {}
-};
-
-
-class LogChannel {
-protected:
-    std::string name_;
-    LogLevel level_;
-public:
-    LogChannel(std::string name, LogLevel level) : name_(std::move(name)), level_(level) {}
-    virtual ~LogChannel() = default;
-    virtual void write(const LogInfoPtr & stream)=0;
-    const std::string &getName() const {
-        return name_;
-    }
-
-    LogLevel getLevel() const {
-        return level_;
-    }
-
-    void setLevel(LogLevel level) {
-        level_ = level;
-    }
-};
-
-class LogWriter {
-public:
-    LogWriter() = default;
-    virtual ~LogWriter() = default;
-    virtual void write(const LogInfoPtr &stream) =0;
-};
-
+//////////////// Logger /////////////////////
 class Logger : public Noncopyable {
 private:
+    std::string logger_name_;
     LogWriterPtr writer_;
     std::map<std::string, LogChannelPtr> channels_;
 public:
-    [[nodiscard]] const std::map<std::string, LogChannelPtr> &getChannels() const {
-        return channels_;
-    }
+    explicit Logger(const std::string &loggerName);
+    static void Destroy();
+    ~Logger();
+    static Logger& getLogger();
+    const std::string &getName() const;
+    const std::map<std::string, LogChannelPtr> &getChannels() const;
+    void addChannel(const LogChannelPtr&& channel);
+    void deleteChannel(const std::string& name);
+    void setWriter(const LogWriterPtr &&writer);
+    void write(const LogContextPtr &ctx);
+    void setLoggerLevel(LogLevel logLevel);
+};
+
+//////////////// LogContext /////////////////////
+class LogContext : public std::ostringstream {
+    friend class LogChannel;
+private:
+    LogLevel level_;
+    std::string file_name_;
+    std::string function_name_;
+    std::string thread_name_;
+    std::string module_name_;
+    std::string content_;
+    std::string flag_;
+    int line_;
+    bool got_content_ = false;
 public:
-    static Logger& getLogger() {
-        static auto* instance = new Logger();
-        return *instance;
-    }
+    LogContext(LogLevel level, const char *file, const char *function, int line, const char *module_name, const char *flag);
+    const std::string& str();
+    LogLevel getLevel() const;
+};
 
-    static void Destroy() {
-        delete &Logger::getLogger();
-    }
-
-    void addChannel(const LogChannelPtr&& channel) {
-        channels_[channel->getName()] = channel;
-    }
-
-    void deleteChannel(const std::string& name) {
-        auto iter = channels_.find(name);
-        if (iter != channels_.end()) {
-            channels_.erase(iter);
+class LogContextCapture {
+private:
+    LogContextPtr log_context_;
+    Logger& logger_;
+public:
+    LogContextCapture(Logger &logger, LogLevel level, const char *file, const char *function, int line, const char *flag = "");
+    ~LogContextCapture();
+    LogContextCapture &operator<<(std::ostream &(*f)(std::ostream &));
+    template<typename T>
+    LogContextCapture &operator<<(T &&data) {
+        if (!log_context_) {
+            return *this;
         }
+        (*log_context_) << std::forward<T>(data);
+        return *this;
     }
 
-    void setWriter(const LogWriterPtr &&writer) {
-        if (writer) {
-            writer_ = writer;
-        }
-    }
+};
 
-    void write(const LogInfoPtr &stream) {
-        if (writer_) {
-            writer_->write(stream);
-            return;
-        }
-        for (auto &chn : channels_) {
-            chn.second->write(stream);
-        }
-    }
-
-    void setLoggerLevel(LogLevel logLevel) {
-        for (const auto& chn : channels_) {
-            chn.second->setLevel(logLevel);
-        }
-    }
+//////////////// LogChannel /////////////////////
+class LogChannel : public Noncopyable {
+protected:
+    std::string name_;
+    LogLevel level_;
+    static std::string printTime();
+public:
+    LogChannel(std::string name, LogLevel level) : name_(std::move(name)), level_(level) {}
+    virtual ~LogChannel() = default;
+    virtual void write(const Logger &logger, const LogContextPtr &ctx) = 0;
+    const std::string &getName() const;
+    LogLevel getLevel() const;
+    void setLevel(LogLevel level);
+    void format(const Logger &logger, std::ostream &ost, const LogContextPtr &ctx,
+                        bool enable_color = true, bool enable_detail = true);
 };
 
 class ConsoleChannel: public LogChannel {
 public:
-    ConsoleChannel(const std::string& name, LogLevel level) :
-            LogChannel(name, level) {
-    }
+    explicit ConsoleChannel(const std::string& name = "ConsoleChannel", LogLevel level = LTrace);
     ~ConsoleChannel() override = default;
-    void write(const LogInfoPtr &logInfo) override {
-        if (getLevel() > logInfo->getLevel()) {
-            return;
-        }
-        logInfo->format(std::cout, true);
-    }
+    void write(const Logger &logger, const LogContextPtr &ctx) override;
 };
 
-class LogInfoMaker {
+class FileChannel : public LogChannel {
 private:
-    LogInfoPtr log_info;
+    std::string path_;
 public:
-    LogInfoMaker(LogLevel level, const char* file, const char* function,
-                 int line) :
-            log_info(new LogInfo(level, file, function, line)) {
-    }
+    const std::string &getPath() const;
 
-    LogInfoMaker(LogInfoMaker &&other)  noexcept {
-        this->log_info = other.log_info;
-        other.log_info.reset();
-    }
+    void setPath(const std::string &path);
 
-    LogInfoMaker(const LogInfoMaker &other) {
-        this->log_info = other.log_info;
-        (const_cast<LogInfoMaker &>(other)).log_info.reset();
-    }
-    ~LogInfoMaker() {
-        *this << std::endl;
-    }
+private:
+    std::ofstream ofstream_;
+public:
+    FileChannel(const std::string &path, const std::string &name = "FileChannel", LogLevel level = LTrace);
+    ~FileChannel() override;
 
-    template<typename T>
-    LogInfoMaker& operator <<(const T& data) {
-        if (!log_info) {
-            return *this;
-        }
-        log_info->message_ << data;
-        return *this;
-    }
+    bool createFile();
+    void write(const Logger &logger, const LogContextPtr &ctx) override;
+};
 
-    LogInfoMaker& operator <<(const char *data) {
-        if (!log_info) {
-            return *this;
-        }
-        if(data){
-            log_info->message_ << data;
-        }
-        return *this;
-    }
 
-    LogInfoMaker& operator <<(std::ostream&(*f)(std::ostream&)) {
-        if (!log_info) {
-            return *this;
-        }
-        log_info->message_ << f;
-        Logger::getLogger().write(log_info);
-        log_info.reset();
-        return *this;
-    }
-    void clear() {
-        log_info.reset();
-    }
+
+//////////////// LogWriter /////////////////////
+class LogWriter {
+public:
+    LogWriter() = default;
+    virtual ~LogWriter() = default;
+    virtual void write(const LogContextPtr &log_context, Logger* logger) = 0;
 };
 
 class AsyncLogWriter: public LogWriter {
 public:
-    AsyncLogWriter() : exit_flag(false) {
-        _thread.reset(new std::thread([this]() {this->run();}));
-    }
+    AsyncLogWriter();
+    ~AsyncLogWriter() override;
+    void write(const LogContextPtr &log_context, Logger* logger) override;
+    void flush();
 
-    ~AsyncLogWriter() override {
-        exit_flag = true;
-        sem.release();
-        _thread->join();
-        while (!_pending.empty()) {
-            auto &next = _pending.front();
-            realWrite(next);
-            _pending.pop_front();
-        }
-    }
-
-    void write(const LogInfoPtr &stream) override {
-        {
-            std::lock_guard<std::mutex> lock(_mutex);
-            _pending.push_back(stream);
-        }
-        sem.release();
-    }
-protected:
-    void run() {
-        while (!exit_flag) {
-            sem.acquire();
-            {
-                std::lock_guard<std::mutex> lock(_mutex);
-                if (!_pending.empty()) {
-                    auto &next = _pending.front();
-                    realWrite(next);
-                    _pending.pop_front();
-                }
-            }
-        }
-    }
-    static inline void realWrite(const LogInfoPtr &stream) {
-        for (auto &chn : Logger::getLogger().getChannels()) {
-            chn.second->write(stream);
-        }
-    }
+private:
+    void run();
     bool exit_flag;
-    std::shared_ptr<std::thread> _thread;
-    std::deque<LogInfoPtr> _pending;
-    std::counting_semaphore<99999> sem = std::counting_semaphore<99999>(0);
-    std::mutex _mutex;
+    std::shared_ptr<std::thread> thread_;
+    std::list<std::pair<LogContextPtr, Logger*>> pending_queue_;
+    std::counting_semaphore<1> sem = std::counting_semaphore<1>(0);
+    std::mutex mtx_;
 };
 
-#define TRACE LogInfoMaker(Trace, __FILE__,__FUNCTION__, __LINE__)
-#define DEBUG LogInfoMaker(Debug, __FILE__,__FUNCTION__, __LINE__)
-#define INFO LogInfoMaker(Info, __FILE__,__FUNCTION__, __LINE__)
-#define WARN LogInfoMaker(Warn,__FILE__, __FUNCTION__, __LINE__)
-#define ERROR LogInfoMaker(Error,__FILE__, __FUNCTION__, __LINE__)
-#define FATAL LogInfoMaker(Fatal,__FILE__, __FUNCTION__, __LINE__)
+
+//用法: DebugL << 1 << "+" << 2 << '=' << 3;
+#define WriteL(level) LogContextCapture(Logger::getLogger(), level, __FILE__, __FUNCTION__, __LINE__)
+#define TraceL WriteL(LTrace)
+#define DebugL WriteL(LDebug)
+#define InfoL WriteL(LInfo)
+#define WarnL WriteL(LWarn)
+#define ErrorL WriteL(LError)
+
 
 #endif //XLTOOLKIT_LOGGER_H

@@ -11,6 +11,8 @@
 #include <sys/epoll.h>
 
 #include "Thread/thread_pool.h"
+#include "Poller/PipeWrapper.h"
+#include "Utility/Logger.h"
 
 using PollEventCB = function<void(int event)>;
 using PollDelCB = function<void(bool success)>;
@@ -27,27 +29,34 @@ typedef enum {
 class EventPoller {
 private:
     int epoll_fd_ = -1;
-    unordered_map<int, PollEventCB> event_map_;
+    unordered_map<int, std::shared_ptr<poll_event>> event_map_;
     mutex mtx_event_map_;
-
     ThreadPool::Priority priority_;
     std::mutex mtx_running_;
+    thread* loop_thread_;
+    thread::id loop_thread_id_;
+    bool exit_flag_;
+    PipeWrapper pipe_;
+
+    bool isCurrentThread() const {
+        return this_thread::get_id() == loop_thread_id_;
+    }
 
 public:
-    EventPoller(bool enable_self_run = false);
+    explicit EventPoller(bool enable_self_run = false);
+    void init();
     virtual ~EventPoller();
-    static EventPoller& getEventPoller(bool enable_self_run = false) {
-        static auto* event_poller = new EventPoller(enable_self_run);
-        return *event_poller;
-    }
-
-    static void destroy() {
-        delete &EventPoller::getEventPoller();
-    }
+    static EventPoller& getEventPoller(bool enable_self_run = false);
+    static void destroy();
 
     int addEvent(int fd, int event, PollEventCB &&cb);
     int delEvent(int fd, PollDelCB&& cb = nullptr);
     int modifyEvent(int fd, int event);
+    void onPipeEvent();
+    
+    void runLoop();
+    void sync(PollAsyncCB&& cb);
+    void async(PollAsyncCB&& cb);
 
 
 

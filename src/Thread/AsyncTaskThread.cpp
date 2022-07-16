@@ -15,10 +15,9 @@ exit_flag_(false)
 AsyncTaskThread::~AsyncTaskThread() {
     if (task_thread_) {
         exit_flag_ = true;
-        cv.notify_one();
-        if (task_thread_->joinable()) task_thread_->join();
-        delete task_thread_;
-        task_thread_ = nullptr;
+//        cv.notify_one();
+//        task_thread_->join();
+
         threadPool_->waitAndExit();
     }
 }
@@ -41,7 +40,7 @@ void AsyncTaskThread::doTask() {
     while (!exit_flag_) {
         unique_lock<mutex> ulk(mtx_);
         if (task_pq_.empty()) {
-            cv.wait_for(ulk, 1h);
+            cv.wait_for(ulk, 2s);
         } else {
             cv.wait_for(ulk, task_interval_);
         }

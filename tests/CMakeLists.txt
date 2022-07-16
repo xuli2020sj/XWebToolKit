@@ -11,8 +11,6 @@ foreach(TEST_SRC ${TEST_SRC_LIST})
     target_link_libraries(${TEST_EXE_NAME}
             ${CMAKE_PROJECT_NAME}_shared
             ${LINK_LIB_LIST}
-            gtest
-            spdlog::spdlog
             Threads::Threads
             ${CMAKE_THREAD_LIBS_INIT})
 endforeach(TEST_SRC ${TEST_SRC_LIST})

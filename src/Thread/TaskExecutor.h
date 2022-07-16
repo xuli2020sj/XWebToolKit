@@ -10,7 +10,7 @@
 #include <list>
 #include <functional>
 #include "memory"
-#include "Utility/util.h"
+
 
 namespace xtoolkit {
 
@@ -64,7 +64,7 @@ private:
     std::list<TimeRecord> _time_list;
 };
 
-class TaskCancelable : public noncopyable {
+class TaskCancelable {
 public:
     TaskCancelable() = default;
     virtual ~TaskCancelable() = default;

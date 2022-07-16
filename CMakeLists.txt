@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(XLToolKit)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 set(INSTALL_PATH_LIB lib)
@@ -9,8 +9,7 @@ set(INSTALL_PATH_INCLUDE include)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
-include(gtest)
-include(spdlog)
+
 
 #设置子目录
 set(SUB_DIR_LIST "Network" "Poller" "Thread" "Utility")
