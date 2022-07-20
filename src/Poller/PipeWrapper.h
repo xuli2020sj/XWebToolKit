@@ -14,8 +14,8 @@ public:
     PipeWrapper();
     ~PipeWrapper();
 
-    inline int getReadFD () const;
-    inline int getWriteFD () const;
+    int getReadFD () const;
+    int getWriteFD () const;
     void clearFD();
 
     size_t write(const void *buf, size_t n_bytes);

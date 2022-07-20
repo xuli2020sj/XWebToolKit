@@ -10,85 +10,29 @@
 #include <list>
 #include <functional>
 #include "memory"
+#include <semaphore>
 
 
-namespace xtoolkit {
 
-/**
-* cpu负载计算器
-*/
-class ThreadLoadCounter {
-public:
-    /**
-     * 构造函数
-     * @param max_size 统计样本数量
-     * @param max_usec 统计时间窗口,亦即最近{max_usec}的cpu负载率
-     */
-    ThreadLoadCounter(uint64_t max_size, uint64_t max_usec);
-    ~ThreadLoadCounter() = default;
-
-    /**
-     * 线程进入休眠
-     */
-    void startSleep();
-
-    /**
-     * 休眠唤醒,结束休眠
-     */
-    void sleepWakeUp();
-
-    /**
-     * 返回当前线程cpu使用率，范围为 0 ~ 100
-     * @return 当前线程cpu使用率
-     */
-    int load();
-
-private:
-    struct TimeRecord {
-        TimeRecord(uint64_t tm, bool slp) {
-            _time = tm;
-            _sleep = slp;
-        }
-
-        bool _sleep;
-        uint64_t _time;
-    };
-
-private:
-    bool _sleeping = true;
-    uint64_t _last_sleep_time;
-    uint64_t _last_wake_time;
-    uint64_t _max_size;
-    uint64_t _max_usec;
-    std::mutex _mtx;
-    std::list<TimeRecord> _time_list;
-};
-
-class TaskCancelable {
-public:
-    TaskCancelable() = default;
-    virtual ~TaskCancelable() = default;
-    virtual void cancel() = 0;
-};
 
 template<class R, class... ArgTypes>
-class TaskCancelableImp;
+class TaskCancelable;
 
 template<class R, class... ArgTypes>
-class TaskCancelableImp<R(ArgTypes...)> : public TaskCancelable {
+class TaskCancelable<R(ArgTypes...)>{
 public:
-    using Ptr = std::shared_ptr<TaskCancelableImp>;
+    using Ptr = std::shared_ptr<TaskCancelable>;
     using func_type = std::function<R(ArgTypes...)>;
 
-    ~TaskCancelableImp() = default;
+    ~TaskCancelable() = default;
 
     template<typename FUNC>
-    TaskCancelableImp(FUNC &&task) {
+    TaskCancelable(FUNC &&task) {
         _strongTask = std::make_shared<func_type>(std::forward<FUNC>(task));
         _weakTask = _strongTask;
     }
 
-    void cancel() override {
+    void cancel()  {
         _strongTask = nullptr;
     }
 
@@ -130,12 +74,63 @@ protected:
 };
 
 using TaskIn = std::function<void()>;
-using Task = TaskCancelableImp<void()>;
+using Task = TaskCancelable<void()>;
 
 class TaskExecutor {
+public:
+    using Ptr = std::shared_ptr<TaskExecutor>;
 
+    explicit TaskExecutor(uint64_t max_size = 32, uint64_t max_u_sec = 2 * 1000 * 1000);;
+    virtual ~TaskExecutor();
+
+    void sleep();
+    void wake();
+    int load();
+
+    virtual Task::Ptr async(TaskIn task, bool is_sync) = 0;
+    virtual Task::Ptr asyncFirst(TaskIn task, bool is_sync);
+    void syncExecuteTask();
+
+private:
+    struct TimeRecord {
+        bool sleep_;
+        uint64_t time_;
+        TimeRecord(uint64_t run_time, bool sleep_flag) {
+            time_ = run_time;
+            sleep_ = sleep_flag;
+        }
+    };
+
+    bool sleeping_flag_ = true;
+    uint64_t last_sleep_time_;
+    uint64_t last_wake_time_;
+    uint64_t max_size_;
+    uint64_t max_u_sec_;
+    std::mutex mtx_list;
+    std::list<TimeRecord> time_list_;
 };
 
-} // xtoolkit
+class TaskExecutorGetter {
+    using Ptr = std::shared_ptr<TaskExecutorGetter>;
+public:
+    TaskExecutorGetter() = default;
+    ~TaskExecutorGetter() = default;
+
+    TaskExecutor::Ptr getExecutor() ;
+    std::vector<int> getExecutorLoad();
+    void getExecutorDelay(const std::function<void(const std::vector<int> &)> &callback);
+    void for_each(const std::function<void(const TaskExecutor::Ptr &)> &cb);
+    size_t getExecutorSize() const ;
+
+protected:
+    size_t addPoller(const std::string &name, size_t size, int priority, bool register_thread);
+    size_t thread_pos_ = 0;
+    std::vector<TaskExecutor::Ptr> threads_;
+
+private:
+    static bool setThreadAffinity(int i);
+    static std::string limitString(const char *name, size_t max_size);
+    static void setThreadName(const char *name);
+};
 
 #endif //XLTOOLKIT_TASKEXECUTOR_H

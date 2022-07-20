@@ -54,7 +54,6 @@ public:
     }
 
     static ThreadPool &getThreadPool() {
-        //单例模式
         static ThreadPool instance(thread::hardware_concurrency());
         return instance;
     }

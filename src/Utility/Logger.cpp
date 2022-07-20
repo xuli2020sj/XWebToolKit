@@ -5,6 +5,19 @@
 #include <iomanip>
 #include "Logger.h"
 
+Logger *g_defaultLogger = nullptr;
+
+Logger &getLoggerg() {
+    if (!g_defaultLogger) {
+        g_defaultLogger = &Logger::getLogger();
+    }
+    return *g_defaultLogger;
+}
+
+void setLogger(Logger *logger) {
+    g_defaultLogger = logger;
+}
+
 static inline std::string exePath() {
     char buffer[PATH_MAX * 2 + 1] = {0};
     int n = -1;

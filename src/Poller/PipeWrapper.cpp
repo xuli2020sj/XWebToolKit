@@ -19,11 +19,11 @@ PipeWrapper::PipeWrapper() {
     ioctl(pipe_fd_[1], FIONBIO, false);
 }
 
-inline int PipeWrapper::getReadFD() const {
+int PipeWrapper::getReadFD() const {
     return pipe_fd_[0];
 }
 
-inline int PipeWrapper::getWriteFD() const{
+int PipeWrapper::getWriteFD() const{
     return pipe_fd_[1];
 }
 
@@ -39,9 +39,17 @@ void PipeWrapper::clearFD() {
 }
 
 size_t PipeWrapper::write(const void *buf, size_t n_bytes) {
-    return ::write(pipe_fd_[1], buf, n_bytes);
+    int ret;
+    do {
+        ret = ::write(pipe_fd_[1], buf, n_bytes);
+    } while (-1 == ret && EINTR == errno);
+    return ret;
 }
 
 size_t PipeWrapper::read(void *buf, size_t n_bytes) {
-    return ::read(pipe_fd_[0], buf, n_bytes);
+    int ret;
+    do {
+        ret = ::read(pipe_fd_[0], buf, n_bytes);
+    } while (-1 == ret && EINTR == errno);
+    return ret;
 }

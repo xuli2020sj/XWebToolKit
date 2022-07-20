@@ -7,39 +7,35 @@
 using namespace std;
 using namespace std::chrono;
 
-class Timer
-{
+class Timer {
 public:
-    Timer()
-    {
-        update();
+    Timer() {
+        reset();
     }
 
-    ~Timer()
-    {
+    ~Timer() {
     }
 
-    void update()
-    {
-        start_ = high_resolution_clock::now();
+    void reset() {
+        start_ = std::chrono::steady_clock::now().time_since_epoch();
     }
 
-    double getTimerSecond()
-    {
-        return getTimerMicroSec() * 0.000001;
+    uint64_t getTimerSec() {
+        auto now_s = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        return now_s - std::chrono::duration_cast<std::chrono::seconds>(start_).count();
     }
 
-    double getTimerMilliSec()
-    {
-        return getTimerMicroSec()*0.001;
+    uint64_t getTimerMilliSec() {
+        auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        return now_ms - std::chrono::duration_cast<std::chrono::milliseconds>(start_).count();
     }
 
-    long long getTimerMicroSec()
-    {
-        return duration_cast<microseconds>(high_resolution_clock::now() - start_).count();
+    uint64_t getTimerMicroSec() {
+        auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        return now_us - std::chrono::duration_cast<std::chrono::microseconds>(start_).count();
     }
 private:
-    time_point<high_resolution_clock> start_;
+    duration<long, ratio<1, 1000000000>> start_;
 };
 
 #endif

@@ -21,6 +21,15 @@
 #include <fstream>
 #include "chrono"
 
+class Logger;
+class LogWriter;
+class LogContext;
+class LogContextCapture;
+class LogChannel;
+
+Logger &getLoggerg();
+
+
 class Noncopyable {
 public:
     Noncopyable(const Noncopyable&) = delete;
@@ -44,11 +53,7 @@ typedef enum {
     LTrace = 0, LDebug, LInfo, LWarn, LError
 } LogLevel;
 
-class Logger;
-class LogWriter;
-class LogContext;
-class LogContextCapture;
-class LogChannel;
+
 
 using LogContextPtr = std::shared_ptr<LogContext>;
 using LogChannelPtr = std::shared_ptr<LogChannel>;
@@ -56,12 +61,13 @@ using LogWriterPtr = std::shared_ptr<LogWriter>;
 using LoggerPtr = std::shared_ptr<Logger>;
 
 //////////////// Logger /////////////////////
-class Logger : public Noncopyable {
+class Logger : public Noncopyable , public std::enable_shared_from_this<Logger> {
 private:
     std::string logger_name_;
     LogWriterPtr writer_;
     std::map<std::string, LogChannelPtr> channels_;
 public:
+    using Ptr = std::shared_ptr<Logger>;
     explicit Logger(const std::string &loggerName);
     static void Destroy();
     ~Logger();
@@ -181,9 +187,11 @@ private:
     std::mutex mtx_;
 };
 
+extern Logger *g_defaultLogger;
+
 
 //用法: DebugL << 1 << "+" << 2 << '=' << 3;
-#define WriteL(level) LogContextCapture(Logger::getLogger(), level, __FILE__, __FUNCTION__, __LINE__)
+#define WriteL(level) LogContextCapture(::getLoggerg(), level, __FILE__, __FUNCTION__, __LINE__)
 #define TraceL WriteL(LTrace)
 #define DebugL WriteL(LDebug)
 #define InfoL WriteL(LInfo)
